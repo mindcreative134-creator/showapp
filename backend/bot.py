@@ -137,8 +137,22 @@ async def fetch_tmdb_metadata(title: str, year: str = ""):
     return None
 
 # ==========================================================================
-# REAL-TIME BOT STREAM SCANNER LISTENER
+# REAL-TIME BOT STREAM SCANNER LISTENER & COMMANDS
 # ==========================================================================
+
+@bot.on_message(filters.command("start") & filters.private)
+async def handle_start_command(client: Client, message: Message):
+    """
+    Replies to the /start command in private messages so the user knows the bot is working.
+    """
+    logger.info(f"[COMMAND] User {message.from_user.id} triggered /start command.")
+    await message.reply_text(
+        "👋 **Hello! I am the Infinity TV Indexer & Stream Bot!**\n\n"
+        "I am currently active and auto-indexing movie/series files from your Telegram channels "
+        "directly into your **MongoDB Cluster** (`appdb`)!\n\n"
+        "⚡ **Status**: Online & Fully Operational!\n"
+        "🌐 **API base URL**: https://showapp-y1nd.onrender.com"
+    )
 
 @bot.on_message(filters.channel)
 async def handle_new_channel_post(client: Client, message: Message):
@@ -163,12 +177,14 @@ async def handle_new_channel_post(client: Client, message: Message):
     if message.document and not video.mime_type.startswith("video/"):
         return
         
-    logger.info(f"Indexing new movie file found in {chat.username}: {filename}")
+    logger.info(f"✨ [INDEXER] Found new movie file post in channel @{chat.username}: '{filename}'")
     
     # 1. Parse filename metadata
     title, year, quality = parse_filename(filename)
+    logger.info(f"🔎 [PARSER] Parsed Filename -> Title: '{title}' | Year: '{year}' | Quality: '{quality}'")
     
     # 2. Scrape premium TMDb details
+    logger.info(f"🌐 [TMDb] Querying TMDb developer APIs to scrape metadata for: '{title}'...")
     metadata = await fetch_tmdb_metadata(title, year)
     
     # 3. Structure Document
@@ -192,6 +208,7 @@ async def handle_new_channel_post(client: Client, message: Message):
       
     # Overwrite default fallback with TMDb metadata if scraped successfully
     if metadata:
+        logger.info(f"✅ [TMDb] TMDb metadata found! Title: '{metadata['title']}' | Rating: {metadata['rating']}")
         doc.update({
             "title": metadata["title"],
             "type": metadata["type"],
@@ -209,7 +226,10 @@ async def handle_new_channel_post(client: Client, message: Message):
             for s in doc["seasons"]:
                 for ep in s["episodes"]:
                     ep["videoUrl"] = f"{Config.BASE_URL}/api/stream/{message.id}"
+    else:
+        logger.warning(f"⚠️ [TMDb] No TMDb metadata found. Falling back to default parsed details.")
                     
     # Save to MongoDB
+    logger.info(f"💾 [DATABASE] Syncing and saving document '{doc['title']}' into MongoDB database 'appdb'...")
     inserted = await db_add_movie(doc)
-    logger.info(f"Database sync successful: '{doc['title']}' saved under ID: {inserted.get('id')}")
+    logger.info(f"🎉 [DATABASE] Success! Indexed movie '{doc['title']}' stored in collection 'movies' under ID: {inserted.get('id')}")
