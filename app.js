@@ -15,7 +15,10 @@ class ShowApp {
     this.scrapeLogTimer = null;
   }
 
-  init() {
+  async init() {
+    // Synchronize data directly from live MongoDB Cloud instance
+    await showAppDB.syncFromBackend();
+
     // Render initial contents
     this.renderHome();
     this.renderSearchCatalog();
@@ -781,7 +784,7 @@ class ShowApp {
 
     // Add manual form
     const addForm = document.getElementById("admin-add-form");
-    addForm.addEventListener("submit", (e) => {
+    addForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       
       const newMedia = {
@@ -820,20 +823,21 @@ class ShowApp {
         ];
       }
 
-      const added = showAppDB.addMovie(newMedia);
+      const added = await showAppDB.addMovie(newMedia);
       if (added) {
-        alert(`Successfully manual indexed '${newMedia.title}'! Auto matched TMDb cover details.`);
+        alert(`Successfully manual indexed '${newMedia.title}' to MongoDB! Auto matched TMDb cover details.`);
         addForm.reset();
+        await showAppDB.syncFromBackend();
         this.renderAdminTable();
         this.renderHome();
       } else {
-        alert("This media asset is already indexed in the database!");
+        alert("Failed to save media asset to MongoDB database.");
       }
     });
 
     // Add channel form
     const chanForm = document.getElementById("admin-channel-form");
-    chanForm.addEventListener("submit", (e) => {
+    chanForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const username = document.getElementById("chan-username").value.trim();
       const name = document.getElementById("chan-name").value.trim();
@@ -843,8 +847,9 @@ class ShowApp {
         username: username.startsWith("@") ? username : "@" + username
       };
 
-      showAppDB.addChannel(chan);
+      await showAppDB.addChannel(chan);
       chanForm.reset();
+      await showAppDB.syncFromBackend();
       this.renderAdminChannels();
       this.populateSelectOptions();
     });
@@ -901,10 +906,10 @@ class ShowApp {
       () => `[BOT] Sync finished. Total messages scanned: ${limit}. Added/Updated: 3 items. MongoDB synchronized.`
     ];
 
-    const runNextLog = () => {
+    const runNextLog = async () => {
       if (currentStep >= logSequence.length) {
         // Index files in actual DB
-        templates.forEach(t => {
+        for (const t of templates) {
           const enrich = MOCK_TMDB_API.search(t.title);
           const item = {
             title: t.title,
@@ -938,8 +943,10 @@ class ShowApp {
             item.videoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
           }
 
-          showAppDB.addMovie(item);
-        });
+          await showAppDB.addMovie(item);
+        }
+
+        await showAppDB.syncFromBackend();
 
         // Finished Scrape
         this.isScraping = false;
@@ -1023,7 +1030,7 @@ class ShowApp {
     lucide.createIcons();
   }
 
-  editAdminMovie(id) {
+  async editAdminMovie(id) {
     const movie = showAppDB.getMovies().find(m => m.id === id);
     if (!movie) return;
 
@@ -1041,12 +1048,13 @@ class ShowApp {
     document.getElementById("add-title").focus();
 
     // Delete existing on save to overwrite
-    showAppDB.deleteMovie(movie.id);
+    await showAppDB.deleteMovie(movie.id);
   }
 
-  deleteAdminMovie(id) {
+  async deleteAdminMovie(id) {
     if (confirm("Are you sure you want to delete this indexed media asset from the database?")) {
-      showAppDB.deleteMovie(id);
+      await showAppDB.deleteMovie(id);
+      await showAppDB.syncFromBackend();
       this.renderAdminTable();
       this.renderHome();
       this.renderSearchCatalog();
@@ -1073,15 +1081,17 @@ class ShowApp {
     lucide.createIcons();
   }
 
-  toggleChannelActive(id) {
-    showAppDB.toggleChannel(id);
+  async toggleChannelActive(id) {
+    await showAppDB.toggleChannel(id);
+    await showAppDB.syncFromBackend();
     this.renderAdminChannels();
     this.populateSelectOptions();
   }
 
-  deleteChannel(id) {
+  async deleteChannel(id) {
     if (confirm("Are you sure you want to stop tracking this channel?")) {
-      showAppDB.deleteChannel(id);
+      await showAppDB.deleteChannel(id);
+      await showAppDB.syncFromBackend();
       this.renderAdminChannels();
       this.populateSelectOptions();
     }
