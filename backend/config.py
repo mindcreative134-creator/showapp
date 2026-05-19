@@ -25,4 +25,4 @@ class Config:
     # Stream Server Configuration
     PORT = int(os.getenv("PORT", "8000"))
     HOST = os.getenv("HOST", "0.0.0.0")
-    BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
+    BASE_URL = os.getenv("BASE_URL", "https://showapp-y1nd.onrender.com")
