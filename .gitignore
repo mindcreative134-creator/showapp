@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment configurations (Recommended to ignore to protect credentials, but can be added manually)
+# config.env
+
+# OS files
+.DS_Store
+Thumbs.db
