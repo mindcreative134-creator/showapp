@@ -159,12 +159,21 @@ async def handle_new_channel_post(client: Client, message: Message):
     """
     Triggers automatically when a new post arrives in tracked telegram channels.
     """
-    # Check if this channel is in our tracked database
-    tracked_channels = await db_get_channels()
-    tracked_usernames = [c["username"].lower() for c in tracked_channels if c.get("active", True)]
-    
     chat = message.chat
-    if not chat.username or f"@{chat.username}".lower() not in tracked_usernames:
+    is_tracked = False
+
+    # 1. Match against numeric DATABASE_CHANNELS config from environment
+    if chat.id in Config.DATABASE_CHANNELS:
+        is_tracked = True
+    
+    # 2. Match against MongoDB tracked channels collection (fallback)
+    if not is_tracked:
+        tracked_channels = await db_get_channels()
+        tracked_usernames = [c["username"].lower().replace("@", "") for c in tracked_channels if c.get("active", True)]
+        if chat.username and chat.username.lower() in tracked_usernames:
+            is_tracked = True
+
+    if not is_tracked:
         return # Skip untracked channels
         
     # Check if message contains media
@@ -174,10 +183,10 @@ async def handle_new_channel_post(client: Client, message: Message):
         
     filename = video.file_name or message.caption or "Unknown_Movie"
     # Ensure it's a video file format
-    if message.document and not video.mime_type.startswith("video/"):
+    if message.document and not (video.mime_type and video.mime_type.startswith("video/")):
         return
         
-    logger.info(f"✨ [INDEXER] Found new movie file post in channel @{chat.username}: '{filename}'")
+    logger.info(f"✨ [INDEXER] Found new movie file post in channel {chat.title or chat.id}: '{filename}'")
     
     # 1. Parse filename metadata
     title, year, quality = parse_filename(filename)

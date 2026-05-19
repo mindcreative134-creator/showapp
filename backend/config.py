@@ -26,3 +26,8 @@ class Config:
     PORT = int(os.getenv("PORT", "8000"))
     HOST = os.getenv("HOST", "0.0.0.0")
     BASE_URL = os.getenv("BASE_URL", "https://showapp-y1nd.onrender.com")
+
+    # Tracked Telegram Channel IDs (comma-separated integer list)
+    DATABASE_CHANNELS = [
+        int(x.strip()) for x in os.getenv("DATABASE_CHANNELS", "-1002740721681,-1002423454296,-1002185819000,-1002360632501,-1002257290028,-1002719303311,-1002368981263,-1002440315747,-1002903580895").split(",") if x.strip()
+    ]
