@@ -311,13 +311,38 @@ async def stream_telegram_binary(channel_id: str, message_id: int, request: Requ
         if range_header:
             range_bytes = range_header.replace("bytes=", "").split("-")
             start = int(range_bytes[0])
-            end = int(range_bytes[1]) if range_bytes[1] else min(start + (2 * 1024 * 1024) - 1, size - 1) # 2MB Chunk seek
+            end = int(range_bytes[1]) if range_bytes[1] else min(start + (4 * 1024 * 1024) - 1, size - 1) # 4MB Chunk seek
             chunksize = (end - start) + 1
             
+            # Map byte starts to Pyrogram's 1MB chunk offsets
+            chunk_size_bytes = 1024 * 1024
+            start_chunk = start // chunk_size_bytes
+            skip_bytes = start % chunk_size_bytes
+            
             async def range_stream_generator():
-                async for chunk in bot.download_media(video, in_memory=True, offset=start, limit=chunksize):
-                    yield chunk
+                bytes_sent = 0
+                async for chunk in bot.stream_media(message, offset=start_chunk):
+                    if not chunk:
+                        break
                     
+                    # Align first chunk with the exact range start
+                    if bytes_sent == 0 and skip_bytes > 0:
+                        chunk = chunk[skip_bytes:]
+                        
+                    # Truncate to match exact requested content length
+                    remaining = chunksize - bytes_sent
+                    if len(chunk) > remaining:
+                        chunk = chunk[:remaining]
+                        
+                    if not chunk:
+                        break
+                        
+                    yield chunk
+                    bytes_sent += len(chunk)
+                    
+                    if bytes_sent >= chunksize:
+                        break
+                        
             return StreamingResponse(
                 range_stream_generator(),
                 status_code=206,
@@ -330,9 +355,9 @@ async def stream_telegram_binary(channel_id: str, message_id: int, request: Requ
                 }
             )
         else:
-            # Complete sequential download fallback
+            # Complete sequential download fallback using high-performance chunked streaming
             async def full_stream_generator():
-                async for chunk in bot.download_media(video, in_memory=True):
+                async for chunk in bot.stream_media(message):
                     yield chunk
             
             return StreamingResponse(
